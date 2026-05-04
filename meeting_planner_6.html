@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Planejador de Reuniões</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    background: #FAFAF7;
+    color: #2C2C2A;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .container { max-width: 1280px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 4px; }
+  h2 { font-size: 18px; font-weight: 500; margin: 0; }
+  h3 { font-size: 16px; font-weight: 500; margin: 0; }
+  .subtitle { color: #5F5E5A; font-size: 13px; margin: 0 0 20px; }
+
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+  .nav-group { display: flex; align-items: center; gap: 8px; }
+  .nav-label { font-size: 16px; font-weight: 500; min-width: 220px; text-align: center; color: #2C2C2A; }
+
+  .btn {
+    background: #FFFFFF;
+    border: 0.5px solid rgba(0,0,0,0.15);
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    color: #2C2C2A;
+    transition: background 0.1s;
+  }
+  .btn:hover { background: #F1EFE8; }
+  .btn-primary { background: #2C2C2A; color: #FFFFFF; border-color: #2C2C2A; }
+  .btn-primary:hover { background: #444441; }
+  .btn-danger { color: #A32D2D; border-color: rgba(163,45,45,0.25); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+  .filter-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .filter-bar {
+    background: #FFFFFF;
+    border: 0.5px solid rgba(0,0,0,0.08);
+    border-radius: 12px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .filter-label {
+    font-size: 11px;
+    color: #5F5E5A;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    min-width: 90px;
+  }
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    user-select: none;
+    transition: opacity 0.15s;
+  }
+  .filter-chip.inactive { opacity: 0.3; }
+  .filter-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .scope-chip {
+    background: #FFFFFF;
+    border: 0.5px solid rgba(0,0,0,0.2);
+    color: #2C2C2A;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+  .scope-chip.active {
+    background: #2C2C2A;
+    color: #FFFFFF;
+    border-color: #2C2C2A;
+  }
+
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 880px) {
+    .calendar-grid { grid-template-columns: 1fr; }
+  }
+
+  .month-card {
+    background: #FFFFFF;
+    border: 0.5px solid rgba(0,0,0,0.08);
+    border-radius: 12px;
+    padding: 14px 10px;
+  }
+  .month-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 10px;
+    text-align: center;
+    color: #2C2C2A;
+  }
+  .day-headers {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-bottom: 4px;
+  }
+  .day-header {
+    text-align: center;
+    font-size: 10px;
+    color: #888780;
+    font-weight: 500;
+    padding: 4px 0;
+    text-transform: uppercase;
+  }
+  .calendar-cells {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+  }
+  .cell {
+    background: #FAFAF7;
+    border: 0.5px solid rgba(0,0,0,0.04);
+    border-radius: 6px;
+    min-height: 110px;
+    padding: 4px 3px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    overflow: hidden;
+    transition: background 0.1s;
+  }
+  .cell:hover { background: #F1EFE8; }
+  .cell-other { opacity: 0.35; }
+  .cell-today {
+    border: 1px solid #2C2C2A;
+    background: #FFFFFF;
+  }
+  .day-num { font-size: 10px; color: #5F5E5A; font-weight: 500; padding-bottom: 1px; }
+  .day-num-today { color: #2C2C2A; font-weight: 600; }
+
+  .meeting {
+    font-size: 11px;
+    padding: 4px 4px 4px 5px;
+    border-radius: 4px;
+    cursor: pointer;
+    line-height: 1.3;
+    border: 1px solid transparent;
+    border-left: 2px solid transparent;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    max-height: calc(1.3em * 2 + 10px);
+  }
+  /* "Planned" = not yet confirmed in calendar — most subtle */
+  .meeting-planned {
+    background: transparent !important;
+    border-style: dashed !important;
+    border-width: 1px !important;
+    padding: 3px 3px 3px 4px;
+    opacity: 0.85;
+  }
+  /* "Scheduled, no agenda" = confirmed in calendar, agenda pending — subtle solid */
+  .meeting-no-agenda {
+    border: 1px solid transparent;
+  }
+  /* "Scheduled, with agenda" = fully ready — most prominent — handled inline */
+  .more-link { font-size: 9px; color: #5F5E5A; padding-left: 4px; }
+
+  .sidebar {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 880px) {
+    .sidebar { grid-template-columns: 1fr; }
+  }
+  .panel {
+    background: #FFFFFF;
+    border: 0.5px solid rgba(0,0,0,0.08);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .panel-title {
+    font-size: 11px;
+    color: #5F5E5A;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+  }
+  .cadence-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 13px;
+    border-bottom: 0.5px solid rgba(0,0,0,0.05);
+  }
+  .cadence-row:last-child { border-bottom: none; }
+  .cadence-label { display: flex; align-items: center; gap: 8px; }
+  .cadence-stats { color: #5F5E5A; font-size: 12px; }
+
+  .legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 0; }
+  .legend-swatch { display: inline-block; width: 28px; height: 12px; border-radius: 3px; }
+
+  .modal-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(44,44,42,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 100;
+  }
+  .modal {
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 20px;
+    width: 100%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .field { margin-bottom: 12px; }
+  .field-label {
+    font-size: 12px;
+    color: #5F5E5A;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .input, .select, .textarea {
+    width: 100%;
+    padding: 8px 10px;
+    border: 0.5px solid rgba(0,0,0,0.2);
+    border-radius: 8px;
+    background: #FFFFFF;
+    color: #2C2C2A;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .input:focus, .select:focus, .textarea:focus {
+    outline: none;
+    border-color: #2C2C2A;
+    box-shadow: 0 0 0 2px rgba(44,44,42,0.1);
+  }
+  .textarea { min-height: 90px; resize: vertical; line-height: 1.5; }
+
+  .scope-radio-group {
+    display: flex;
+    gap: 6px;
+  }
+  .scope-radio {
+    flex: 1;
+    padding: 8px;
+    text-align: center;
+    border: 0.5px solid rgba(0,0,0,0.2);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    user-select: none;
+    background: #FFFFFF;
+  }
+  .scope-radio:hover { background: #F1EFE8; }
+  .scope-radio.selected {
+    background: #2C2C2A;
+    color: #FFFFFF;
+    border-color: #2C2C2A;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 20px;
+  }
+  .modal-actions-right { display: flex; gap: 8px; }
+
+  .agenda-status-ok { color: #0F6E56; font-weight: 500; }
+  .agenda-status-pending { color: #BA7517; font-weight: 500; }
+
+  .type-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 8px;
+    background: #FAFAF7;
+    border-radius: 8px;
+  }
+  .color-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    flex-shrink: 0;
+  }
+  .color-swatch.selected { border-color: #2C2C2A; }
+  .color-row { display: flex; gap: 4px; }
+
+  .empty-state {
+    text-align: center;
+    padding: 32px 16px;
+    color: #888780;
+    font-size: 13px;
+  }
+
+  .view-banner {
+    background: #FAEEDA;
+    border: 0.5px solid #EF9F27;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .view-banner-text { font-size: 13px; color: #633806; line-height: 1.4; }
+  .view-banner-actions { display: flex; gap: 8px; }
+
+  .share-link-box {
+    background: #FAFAF7;
+    border: 0.5px solid rgba(0,0,0,0.08);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    color: #444441;
+    word-break: break-all;
+    max-height: 90px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+  }
+  .share-status {
+    font-size: 12px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin-top: 10px;
+  }
+  .share-status-ok { background: #EAF3DE; color: #27500A; }
+  .share-status-warn { background: #FAEEDA; color: #633806; }
+  .share-status-err { background: #FCEBEB; color: #791F1F; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Planejador de reuniões</h1>
+  <p class="subtitle">Visualize 2 meses, organize por tipo e escopo, acompanhe pautas</p>
+  <div id="app"></div>
+</div>
+
+<script>
+(function() {
+  const COLORS = {
+    blue:   { bg: '#E6F1FB', border: '#378ADD', text: '#0C447C' },
+    teal:   { bg: '#E1F5EE', border: '#1D9E75', text: '#085041' },
+    purple: { bg: '#EEEDFE', border: '#7F77DD', text: '#3C3489' },
+    coral:  { bg: '#FAECE7', border: '#D85A30', text: '#712B13' },
+    pink:   { bg: '#FBEAF0', border: '#D4537E', text: '#72243E' },
+    amber:  { bg: '#FAEEDA', border: '#EF9F27', text: '#633806' },
+    green:  { bg: '#EAF3DE', border: '#97C459', text: '#27500A' },
+    gray:   { bg: '#F1EFE8', border: '#888780', text: '#444441' }
+  };
+
+  const DEFAULT_LEVELS = ['BU', 'BA', 'Optimization'];
+  const DEFAULT_LEVEL = 'Optimization';
+
+  const STORAGE_KEY = 'meeting_planner_v4';
+  const LEGACY_KEYS = ['meeting_planner_v3', 'meeting_planner_v2', 'meeting_planner_v1'];
+  const DEFAULT_TYPES = [
+    { id: 't1', name: '1:1 stakeholder', color: 'blue' },
+    { id: 't2', name: 'Review', color: 'teal' },
+    { id: 't3', name: 'Discovery', color: 'purple' },
+    { id: 't4', name: 'Voc / Pesquisa', color: 'coral' },
+    { id: 't5', name: 'Cerimônia squad', color: 'amber' }
+  ];
+
+  let state = {
+    types: DEFAULT_TYPES,
+    levels: DEFAULT_LEVELS.slice(),
+    meetings: [],
+    hiddenTypeIds: [],
+    hiddenLevels: [],
+    viewYear: new Date().getFullYear(),
+    viewMonth: new Date().getMonth(),
+    modal: null,
+    viewMode: 'owner',          // 'owner' or 'viewing'
+    sharedSnapshot: null,        // when viewing, holds the original owner data
+    ownerBackup: null            // when viewing, holds the user's own data to restore
+  };
+
+  function loadState() {
+    try {
+      let raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        for (const k of LEGACY_KEYS) {
+          const legacy = localStorage.getItem(k);
+          if (legacy) { raw = legacy; break; }
+        }
+      }
+      if (raw) {
+        const saved = JSON.parse(raw);
+        state.types = saved.types || DEFAULT_TYPES;
+        state.levels = saved.levels || DEFAULT_LEVELS.slice();
+        state.meetings = (saved.meetings || []).map(m => ({
+          ...m,
+          level: m.level || m.scope || DEFAULT_LEVEL,
+          status: m.status || 'scheduled'  // existing meetings default to "scheduled"
+        }));
+        // strip legacy scope field
+        state.meetings.forEach(m => { delete m.scope; });
+        state.hiddenTypeIds = saved.hiddenTypeIds || [];
+        state.hiddenLevels = saved.hiddenLevels || saved.hiddenScopes || [];
+      }
+    } catch (e) { console.error('load failed', e); }
+  }
+
+  function saveState() {
+    if (state.viewMode === 'viewing') return;  // don't overwrite the viewer's own data
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        types: state.types,
+        levels: state.levels,
+        meetings: state.meetings,
+        hiddenTypeIds: state.hiddenTypeIds,
+        hiddenLevels: state.hiddenLevels
+      }));
+    } catch (e) { console.error('save failed', e); }
+  }
+
+  function uid() { return 'm' + Date.now() + Math.random().toString(36).slice(2, 7); }
+
+  function fmtDateISO(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  function monthName(m) {
+    return ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][m];
+  }
+
+  function getTypeById(id) {
+    return state.types.find(t => t.id === id) || state.types[0] || { id:'_', name:'?', color:'gray' };
+  }
+
+  function isTypeVisible(id) { return !state.hiddenTypeIds.includes(id); }
+  function isLevelVisible(s) { return !state.hiddenLevels.includes(s); }
+  function isMeetingVisible(m) { return isTypeVisible(m.typeId) && isLevelVisible(m.level || DEFAULT_LEVEL); }
+
+  function escapeHtml(s) {
+    return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function getNextMonth(year, month) {
+    return month === 11 ? { year: year+1, month: 0 } : { year: year, month: month+1 };
+  }
+
+  function render() {
+    const app = document.getElementById('app');
+    const next = getNextMonth(state.viewYear, state.viewMonth);
+    app.innerHTML =
+      renderViewBanner() +
+      renderToolbar() +
+      renderFilterStack() +
+      `<div class="calendar-grid">
+        ${renderMonth(state.viewYear, state.viewMonth)}
+        ${renderMonth(next.year, next.month)}
+      </div>` +
+      renderSidebar() +
+      renderModal();
+    attachEvents();
+  }
+
+  function renderViewBanner() {
+    if (state.viewMode !== 'viewing') return '';
+    const author = state.sharedSnapshot && state.sharedSnapshot.author
+      ? escapeHtml(state.sharedSnapshot.author)
+      : 'alguém';
+    return `
+      <div class="view-banner">
+        <div class="view-banner-text">
+          <strong style="font-weight:500;">Modo visualização</strong> — você está vendo a agenda compartilhada por <strong style="font-weight:500;">${author}</strong>. Suas reuniões pessoais estão preservadas.
+        </div>
+        <div class="view-banner-actions">
+          <button class="btn" data-action="exit-view">Voltar pra minha agenda</button>
+          <button class="btn btn-primary" data-action="import-shared">Importar pra minha agenda</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderToolbar() {
+    const next = getNextMonth(state.viewYear, state.viewMonth);
+    return `
+      <div class="toolbar">
+        <div class="nav-group">
+          <button class="btn" data-action="prev-month">‹ Anterior</button>
+          <span class="nav-label">${monthName(state.viewMonth)} ${state.viewYear} → ${monthName(next.month)} ${next.year}</span>
+          <button class="btn" data-action="next-month">Próximo ›</button>
+          <button class="btn" data-action="today" style="margin-left: 4px;">Hoje</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${state.viewMode === 'viewing' ? '' : `
+            <button class="btn" data-action="open-share">Compartilhar</button>
+            <button class="btn" data-action="manage-levels">Níveis</button>
+            <button class="btn" data-action="manage-types">Tipos de reunião</button>
+            <button class="btn btn-primary" data-action="new-meeting">+ Nova reunião</button>
+          `}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderFilterStack() {
+    const typeChips = state.types.map(t => {
+      const c = COLORS[t.color];
+      const active = isTypeVisible(t.id);
+      return `<span class="filter-chip ${active?'':'inactive'}"
+                    style="background:${c.bg};color:${c.text};border-color:${c.border};"
+                    data-action="toggle-type-filter" data-id="${t.id}"
+                    title="${active?'Clique para ocultar':'Clique para mostrar'}">
+        <span class="filter-dot" style="background:${c.border};"></span>
+        ${escapeHtml(t.name)}
+      </span>`;
+    }).join('');
+
+    const levelChips = state.levels.map(s => {
+      const active = isLevelVisible(s);
+      return `<span class="filter-chip scope-chip ${active?'active':''}"
+                    data-action="toggle-level-filter" data-level="${escapeHtml(s)}"
+                    title="${active?'Clique para ocultar':'Clique para mostrar'}">${escapeHtml(s)}</span>`;
+    }).join('');
+
+    return `
+      <div class="filter-stack">
+        <div class="filter-bar">
+          <span class="filter-label">Nível</span>
+          ${levelChips || '<span style="color:#888780;font-size:12px;">Nenhum nível cadastrado.</span>'}
+        </div>
+        <div class="filter-bar">
+          <span class="filter-label">Tipo</span>
+          ${typeChips || '<span style="color:#888780;font-size:12px;">Nenhum tipo cadastrado.</span>'}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMonth(year, month) {
+    const first = new Date(year, month, 1);
+    const startWeekday = first.getDay();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    const today = new Date();
+    const todayISO = fmtDateISO(today);
+
+    const cells = [];
+    for (let i = 0; i < startWeekday; i++) {
+      const d = new Date(year, month, -startWeekday + i + 1);
+      cells.push({ date: d, other: true });
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push({ date: new Date(year, month, d), other: false });
+    }
+    while (cells.length % 7 !== 0) {
+      const last = cells[cells.length-1].date;
+      cells.push({ date: new Date(last.getFullYear(), last.getMonth(), last.getDate()+1), other: true });
+    }
+
+    const dayLabels = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+    const headerHtml = dayLabels.map(d => `<div class="day-header">${d}</div>`).join('');
+
+    const cellsHtml = cells.map(cell => {
+      const iso = fmtDateISO(cell.date);
+      const isOther = cell.date.getMonth() !== month;
+      const isToday = iso === todayISO;
+      const meetings = state.meetings
+        .filter(m => m.date === iso && isMeetingVisible(m))
+        .sort((a,b) => (a.time||'').localeCompare(b.time||''));
+
+      const meetingsHtml = meetings.slice(0,3).map(m => {
+        const t = getTypeById(m.typeId);
+        const c = COLORS[t.color];
+        const hasAgenda = m.agenda && m.agenda.trim().length > 0;
+        const status = m.status || 'scheduled';
+        const isPlanned = status === 'planned';
+
+        let styleStr, classStr, statusLabel;
+        if (isPlanned) {
+          // Planejada: tracejado, fundo transparente, cor da borda = cor do tipo
+          styleStr = `color:${c.text};border-color:${c.border};`;
+          classStr = 'meeting meeting-planned';
+          statusLabel = 'planejada';
+        } else if (!hasAgenda) {
+          // Agendada sem pauta: fundo bem suave, sem destaque de borda
+          styleStr = `background:${c.bg};color:${c.text};border-color:${c.bg};opacity:0.75;`;
+          classStr = 'meeting meeting-no-agenda';
+          statusLabel = 'agendada, sem pauta';
+        } else {
+          // Agendada com pauta: fundo sólido, borda lateral marcante
+          styleStr = `background:${c.bg};color:${c.text};border-left-color:${c.border};border-left-width:3px;`;
+          classStr = 'meeting';
+          statusLabel = 'agendada, pauta fechada';
+        }
+
+        const tooltip = `${m.title}${m.time?' • '+m.time:''} • ${m.level||DEFAULT_LEVEL} • ${statusLabel}`;
+        return `<div class="${classStr}" style="${styleStr}"
+                     data-action="open-meeting" data-id="${m.id}"
+                     title="${escapeHtml(tooltip)}">${escapeHtml(m.title || 'Sem título')}</div>`;
+      }).join('');
+      const more = meetings.length > 3 ? `<div class="more-link">+${meetings.length-3} mais</div>` : '';
+
+      return `<div class="cell ${isOther?'cell-other':''} ${isToday?'cell-today':''}"
+                   data-action="day-click" data-date="${iso}">
+        <div class="day-num ${isToday?'day-num-today':''}">${cell.date.getDate()}</div>
+        ${meetingsHtml}${more}
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="month-card">
+        <div class="month-title">${monthName(month)} ${year}</div>
+        <div class="day-headers">${headerHtml}</div>
+        <div class="calendar-cells">${cellsHtml}</div>
+      </div>
+    `;
+  }
+
+  function renderSidebar() {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const in60 = new Date(today);
+    in60.setDate(in60.getDate()+60);
+
+    const counts = {};
+    state.types.forEach(t => counts[t.id] = { total: 0, planned: 0, scheduled: 0, withAgenda: 0 });
+    state.meetings.forEach(m => {
+      const d = new Date(m.date+'T00:00:00');
+      if (d >= today && d <= in60 && counts[m.typeId]) {
+        counts[m.typeId].total++;
+        const status = m.status || 'scheduled';
+        if (status === 'planned') counts[m.typeId].planned++;
+        else counts[m.typeId].scheduled++;
+        if (status === 'scheduled' && m.agenda && m.agenda.trim()) counts[m.typeId].withAgenda++;
+      }
+    });
+
+    const rows = state.types.map(t => {
+      const c = COLORS[t.color];
+      const cnt = counts[t.id];
+      const visible = isTypeVisible(t.id);
+      const parts = [];
+      if (cnt.scheduled > 0) parts.push(`${cnt.withAgenda}/${cnt.scheduled} c/ pauta`);
+      if (cnt.planned > 0) parts.push(`${cnt.planned} planejada${cnt.planned===1?'':'s'}`);
+      const detail = parts.length ? parts.join(' · ') : '—';
+      return `<div class="cadence-row" style="${visible?'':'opacity:0.5;'}">
+        <div class="cadence-label">
+          <span class="filter-dot" style="background:${c.border};"></span>
+          <span>${escapeHtml(t.name)}</span>
+        </div>
+        <div class="cadence-stats">
+          ${cnt.total} ${cnt.total===1?'reunião':'reuniões'} · ${detail}
+        </div>
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="sidebar">
+        <div class="panel">
+          <div class="panel-title">Cadência por tipo — próximos 60 dias</div>
+          ${rows || '<div class="empty-state" style="padding:8px;">Nenhum tipo cadastrado</div>'}
+        </div>
+        <div class="panel">
+          <div class="panel-title">Legenda</div>
+          <div class="legend-row">
+            <span class="legend-swatch" style="background:#E6F1FB;border-left:3px solid #378ADD;border-top:1px solid #E6F1FB;border-right:1px solid #E6F1FB;border-bottom:1px solid #E6F1FB;"></span>
+            <span>Agendada, pauta fechada</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-swatch" style="background:#E6F1FB;opacity:0.75;border:1px solid #E6F1FB;"></span>
+            <span>Agendada, sem pauta</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-swatch" style="border:1px dashed #378ADD;background:transparent;"></span>
+            <span>Planejada (não marcada)</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderModal() {
+    if (!state.modal) return '';
+    if (state.modal.kind === 'meeting') return renderMeetingModal();
+    if (state.modal.kind === 'types') return renderTypesModal();
+    if (state.modal.kind === 'levels') return renderLevelsModal();
+    if (state.modal.kind === 'share') return renderShareModal();
+    return '';
+  }
+
+  function renderMeetingReadOnlyModal() {
+    const m = state.modal.meeting;
+    const t = getTypeById(m.typeId);
+    const c = COLORS[t.color];
+    const hasAgenda = m.agenda && m.agenda.trim();
+    return `
+      <div class="modal-backdrop" data-action="close-modal-bg">
+        <div class="modal" data-action="modal-stop">
+          <div class="modal-header">
+            <h3>${escapeHtml(m.title || 'Sem título')}</h3>
+            <button class="btn btn-sm" data-action="close-modal">✕</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+            <span class="filter-chip" style="background:${c.bg};color:${c.text};border-color:${c.border};">
+              <span class="filter-dot" style="background:${c.border};"></span>
+              ${escapeHtml(t.name)}
+            </span>
+            <span class="filter-chip scope-chip active">${escapeHtml(m.level || DEFAULT_LEVEL)}</span>
+            <span class="filter-chip scope-chip" style="${(m.status||'scheduled')==='planned'?'border-style:dashed;':''}">${(m.status||'scheduled')==='planned'?'Planejada':'Agendada'}</span>
+          </div>
+          <div class="field">
+            <label class="field-label">Data e horário</label>
+            <div style="font-size:13px;">${escapeHtml(m.date)}${m.time?' às '+escapeHtml(m.time):''}</div>
+          </div>
+          ${m.participants ? `<div class="field">
+            <label class="field-label">Participantes</label>
+            <div style="font-size:13px;">${escapeHtml(m.participants)}</div>
+          </div>` : ''}
+          <div class="field">
+            <label class="field-label">Pauta ${hasAgenda?'<span class="agenda-status-ok">✓ fechada</span>':'<span class="agenda-status-pending">⚠ pendente</span>'}</label>
+            <div style="font-size:13px;white-space:pre-wrap;background:#FAFAF7;border:0.5px solid rgba(0,0,0,0.06);border-radius:8px;padding:10px;min-height:40px;line-height:1.5;">${escapeHtml(m.agenda || '(sem pauta)')}</div>
+          </div>
+          <div class="modal-actions" style="justify-content:flex-end;">
+            <button class="btn btn-primary" data-action="close-modal">Fechar</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMeetingModal() {
+    if (state.viewMode === 'viewing') return renderMeetingReadOnlyModal();
+    const m = state.modal.meeting;
+    const isNew = state.modal.isNew;
+    const typeOptions = state.types.map(t =>
+      `<option value="${t.id}" ${t.id===m.typeId?'selected':''}>${escapeHtml(t.name)}</option>`
+    ).join('');
+
+    const currentLevel = m.level || state.levels[0] || DEFAULT_LEVEL;
+    const levelRadios = state.levels.length
+      ? state.levels.map(s =>
+          `<div class="scope-radio ${s===currentLevel?'selected':''}" data-action="set-level" data-level="${escapeHtml(s)}">${escapeHtml(s)}</div>`
+        ).join('')
+      : '<div style="font-size:12px;color:#888780;">Nenhum nível cadastrado. Adicione em "Níveis" no topo.</div>';
+
+    const hasAgenda = m.agenda && m.agenda.trim();
+    const agendaStatus = hasAgenda
+      ? '<span class="agenda-status-ok">✓ fechada</span>'
+      : '<span class="agenda-status-pending">⚠ pendente</span>';
+
+    return `
+      <div class="modal-backdrop" data-action="close-modal-bg">
+        <div class="modal" data-action="modal-stop">
+          <div class="modal-header">
+            <h3>${isNew?'Nova reunião':'Editar reunião'}</h3>
+            <button class="btn btn-sm" data-action="close-modal">✕</button>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Título</label>
+            <input class="input" id="m-title" value="${escapeHtml(m.title)}" placeholder="Ex: 1:1 com Maria" />
+          </div>
+
+          <div class="field field-row">
+            <div>
+              <label class="field-label">Data</label>
+              <input class="input" id="m-date" type="date" value="${m.date}" />
+            </div>
+            <div>
+              <label class="field-label">Horário</label>
+              <input class="input" id="m-time" type="time" value="${m.time||''}" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Status</label>
+            <div class="scope-radio-group">
+              <div class="scope-radio ${(m.status||'planned')==='planned'?'selected':''}" data-action="set-status" data-status="planned">Planejada</div>
+              <div class="scope-radio ${(m.status||'planned')==='scheduled'?'selected':''}" data-action="set-status" data-status="scheduled">Agendada</div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Nível</label>
+            <div class="scope-radio-group" style="flex-wrap:wrap;">${levelRadios}</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Tipo</label>
+            <select class="select" id="m-type">${typeOptions}</select>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Participantes</label>
+            <input class="input" id="m-participants" value="${escapeHtml(m.participants||'')}" placeholder="Ex: Maria, João" />
+          </div>
+
+          <div class="field">
+            <label class="field-label">Pauta ${agendaStatus}</label>
+            <textarea class="textarea" id="m-agenda" placeholder="• Tópico 1&#10;• Tópico 2&#10;• Decisões esperadas">${escapeHtml(m.agenda||'')}</textarea>
+          </div>
+
+          <div class="modal-actions">
+            <div>${!isNew?'<button class="btn btn-danger" data-action="delete-meeting">Excluir</button>':''}</div>
+            <div class="modal-actions-right">
+              <button class="btn" data-action="close-modal">Cancelar</button>
+              <button class="btn btn-primary" data-action="save-meeting">Salvar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderTypesModal() {
+    const colorKeys = Object.keys(COLORS);
+    const rowsHtml = state.types.map((t, idx) => {
+      const swatches = colorKeys.map(k => {
+        const c = COLORS[k];
+        return `<span class="color-swatch ${k===t.color?'selected':''}"
+                      style="background:${c.border};"
+                      data-action="set-type-color" data-idx="${idx}" data-color="${k}"></span>`;
+      }).join('');
+      return `<div class="type-row">
+        <input class="input" style="flex:1;" value="${escapeHtml(t.name)}" data-action="set-type-name" data-idx="${idx}" />
+        <div class="color-row">${swatches}</div>
+        <button class="btn btn-danger btn-sm" data-action="delete-type" data-idx="${idx}">✕</button>
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="modal-backdrop" data-action="close-modal-bg">
+        <div class="modal" data-action="modal-stop">
+          <div class="modal-header">
+            <h3>Tipos de reunião</h3>
+            <button class="btn btn-sm" data-action="close-modal">✕</button>
+          </div>
+          <div style="font-size:12px;color:#5F5E5A;margin-bottom:12px;">Cada tipo tem uma cor. Clique no nome para editar.</div>
+          ${rowsHtml || '<div class="empty-state">Nenhum tipo. Adicione o primeiro abaixo.</div>'}
+          <button class="btn" data-action="add-type" style="width:100%;margin-top:8px;">+ Adicionar tipo</button>
+          <div class="modal-actions" style="justify-content:flex-end;">
+            <button class="btn btn-primary" data-action="close-modal">Concluído</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderLevelsModal() {
+    const rowsHtml = state.levels.map((s, idx) => {
+      return `<div class="type-row">
+        <input class="input" style="flex:1;" value="${escapeHtml(s)}" data-action="set-level-name" data-idx="${idx}" />
+        <button class="btn btn-danger btn-sm" data-action="delete-level" data-idx="${idx}">✕</button>
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="modal-backdrop" data-action="close-modal-bg">
+        <div class="modal" data-action="modal-stop">
+          <div class="modal-header">
+            <h3>Níveis</h3>
+            <button class="btn btn-sm" data-action="close-modal">✕</button>
+          </div>
+          <div style="font-size:12px;color:#5F5E5A;margin-bottom:12px;">Cadastre os níveis das suas reuniões (ex: BU, BA, Optimization, Squad...). Clique no nome para editar.</div>
+          ${rowsHtml || '<div class="empty-state">Nenhum nível. Adicione o primeiro abaixo.</div>'}
+          <button class="btn" data-action="add-level" style="width:100%;margin-top:8px;">+ Adicionar nível</button>
+          <div class="modal-actions" style="justify-content:flex-end;">
+            <button class="btn btn-primary" data-action="close-modal">Concluído</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ===== Share / URL link helpers =====
+
+  function buildShareSnapshot(authorName) {
+    return {
+      v: 1,
+      author: authorName || '',
+      createdAt: new Date().toISOString(),
+      types: state.types,
+      levels: state.levels,
+      meetings: state.meetings
+    };
+  }
+
+  function encodeSnapshotToHash(snapshot) {
+    const json = JSON.stringify(snapshot);
+    if (typeof LZString === 'undefined') {
+      // fallback: base64
+      return 'b64:' + btoa(unescape(encodeURIComponent(json)));
+    }
+    return 'lz:' + LZString.compressToEncodedURIComponent(json);
+  }
+
+  function decodeSnapshotFromHash(hashValue) {
+    try {
+      if (hashValue.startsWith('lz:')) {
+        if (typeof LZString === 'undefined') return null;
+        const json = LZString.decompressFromEncodedURIComponent(hashValue.slice(3));
+        return json ? JSON.parse(json) : null;
+      }
+      if (hashValue.startsWith('b64:')) {
+        const json = decodeURIComponent(escape(atob(hashValue.slice(4))));
+        return JSON.parse(json);
+      }
+      // legacy: try plain LZ
+      if (typeof LZString !== 'undefined') {
+        const json = LZString.decompressFromEncodedURIComponent(hashValue);
+        if (json) return JSON.parse(json);
+      }
+      return null;
+    } catch (e) { console.error('decode failed', e); return null; }
+  }
+
+  function buildShareLink(authorName) {
+    const snapshot = buildShareSnapshot(authorName);
+    const encoded = encodeSnapshotToHash(snapshot);
+    const baseUrl = window.location.origin + window.location.pathname;
+    return baseUrl + '#share=' + encoded;
+  }
+
+  function renderShareModal() {
+    const meetingCount = state.meetings.length;
+    const typeCount = state.types.length;
+    const levelCount = state.levels.length;
+    const link = state.modal.link || '';
+    const authorName = state.modal.authorName || '';
+    const status = state.modal.status || null;
+    const linkSize = link.length;
+    const sizeWarn = linkSize > 30000;
+    const sizeErr = linkSize > 60000;
+
+    return `
+      <div class="modal-backdrop" data-action="close-modal-bg">
+        <div class="modal" data-action="modal-stop" style="max-width: 560px;">
+          <div class="modal-header">
+            <h3>Compartilhar planner</h3>
+            <button class="btn btn-sm" data-action="close-modal">✕</button>
+          </div>
+
+          <div style="font-size:13px;color:#5F5E5A;margin-bottom:14px;line-height:1.5;">
+            Gere um link único contendo sua agenda. Quem abrir vê em modo visualização (não pode editar a sua, mas pode importar pra agenda dela).
+          </div>
+
+          <div class="panel" style="background:#FAFAF7;border:0.5px solid rgba(0,0,0,0.06);margin-bottom:14px;padding:10px 12px;">
+            <div style="font-size:11px;color:#5F5E5A;font-weight:500;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Sua agenda</div>
+            <div style="font-size:13px;">
+              <strong style="font-weight:500;">${meetingCount}</strong> ${meetingCount===1?'reunião':'reuniões'} ·
+              <strong style="font-weight:500;">${typeCount}</strong> ${typeCount===1?'tipo':'tipos'} ·
+              <strong style="font-weight:500;">${levelCount}</strong> ${levelCount===1?'nível':'níveis'}
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Seu nome (aparece para quem abrir o link)</label>
+            <input class="input" id="share-author" value="${escapeHtml(authorName)}" placeholder="Ex: Pati" />
+          </div>
+
+          <button class="btn btn-primary" data-action="generate-link" style="width:100%;padding:10px;margin-bottom:12px;">
+            ${link ? 'Gerar novo link' : 'Gerar link de compartilhamento'}
+          </button>
+
+          ${link ? `
+            <div class="share-link-box" id="share-link-box">${escapeHtml(link)}</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn" data-action="copy-link" style="flex:1;">Copiar link</button>
+            </div>
+            ${sizeErr ? '<div class="share-status share-status-err">⚠ Link muito grande ('+linkSize.toLocaleString('pt-BR')+' caracteres). Pode não funcionar em alguns navegadores ou apps. Considere remover reuniões antigas antes de compartilhar.</div>'
+              : sizeWarn ? '<div class="share-status share-status-warn">Link grande ('+linkSize.toLocaleString('pt-BR')+' caracteres). Funciona, mas pode quebrar se passar por algum encurtador. Teste antes de mandar.</div>'
+              : '<div class="share-status share-status-ok">Link gerado ('+linkSize.toLocaleString('pt-BR')+' caracteres).</div>'}
+            ${status ? `<div class="share-status share-status-ok" style="margin-top:6px;">${escapeHtml(status)}</div>` : ''}
+          ` : ''}
+
+          <div style="margin-top:18px;padding-top:14px;border-top:0.5px solid rgba(0,0,0,0.08);font-size:11px;color:#888780;line-height:1.5;">
+            <strong style="font-weight:500;color:#5F5E5A;">Como funciona:</strong> O link contém os dados da sua agenda comprimidos. Quem abrir vê o snapshot atual. Pra atualizar, gere um novo link. Como os dados estão na URL, evite compartilhar pautas confidenciais por canais públicos.
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function attachEvents() {
+    document.querySelectorAll('[data-action]').forEach(el => {
+      el.addEventListener('click', handleClick);
+    });
+    document.querySelectorAll('input[data-action="set-type-name"]').forEach(el => {
+      el.addEventListener('change', handleTypeNameChange);
+    });
+    document.querySelectorAll('input[data-action="set-level-name"]').forEach(el => {
+      el.addEventListener('change', handleLevelNameChange);
+    });
+  }
+
+  function handleClick(e) {
+    const el = e.currentTarget;
+    const action = el.dataset.action;
+
+    if (action === 'modal-stop') { e.stopPropagation(); return; }
+
+    switch(action) {
+      case 'prev-month':
+        state.viewMonth--;
+        if (state.viewMonth < 0) { state.viewMonth = 11; state.viewYear--; }
+        render(); break;
+      case 'next-month':
+        state.viewMonth++;
+        if (state.viewMonth > 11) { state.viewMonth = 0; state.viewYear++; }
+        render(); break;
+      case 'today': {
+        const t = new Date();
+        state.viewMonth = t.getMonth(); state.viewYear = t.getFullYear();
+        render(); break;
+      }
+      case 'new-meeting':
+        openMeetingModal(null, fmtDateISO(new Date())); break;
+      case 'day-click':
+        if (e.target.closest('[data-action="open-meeting"]')) return;
+        openMeetingModal(null, el.dataset.date); break;
+      case 'open-meeting':
+        e.stopPropagation();
+        openMeetingModal(el.dataset.id); break;
+      case 'close-modal':
+      case 'close-modal-bg':
+        state.modal = null; render(); break;
+      case 'save-meeting':
+        saveMeeting(); break;
+      case 'delete-meeting':
+        if (confirm('Excluir esta reunião?')) deleteMeeting(); break;
+      case 'manage-types':
+        state.modal = { kind: 'types' }; render(); break;
+      case 'add-type':
+        state.types.push({ id: 'tp'+Date.now(), name: 'Novo tipo', color: 'gray' });
+        saveState(); render(); break;
+      case 'delete-type': {
+        const idx = parseInt(el.dataset.idx);
+        if (state.meetings.some(m => m.typeId === state.types[idx].id)) {
+          alert('Existem reuniões usando este tipo. Mova-as antes de excluir.');
+          return;
+        }
+        state.types.splice(idx, 1);
+        saveState(); render(); break;
+      }
+      case 'set-type-color': {
+        const ti = parseInt(el.dataset.idx);
+        state.types[ti].color = el.dataset.color;
+        saveState(); render(); break;
+      }
+      case 'toggle-type-filter': {
+        const id = el.dataset.id;
+        if (state.hiddenTypeIds.includes(id)) {
+          state.hiddenTypeIds = state.hiddenTypeIds.filter(x => x !== id);
+        } else {
+          state.hiddenTypeIds.push(id);
+        }
+        saveState(); render(); break;
+      }
+      case 'toggle-level-filter': {
+        const s = el.dataset.level;
+        if (state.hiddenLevels.includes(s)) {
+          state.hiddenLevels = state.hiddenLevels.filter(x => x !== s);
+        } else {
+          state.hiddenLevels.push(s);
+        }
+        saveState(); render(); break;
+      }
+      case 'set-level': {
+        state.modal.meeting.level = el.dataset.level;
+        render(); break;
+      }
+      case 'set-status': {
+        state.modal.meeting.status = el.dataset.status;
+        render(); break;
+      }
+      case 'manage-levels':
+        state.modal = { kind: 'levels' }; render(); break;
+      case 'add-level': {
+        const base = 'Novo nível';
+        let name = base, n = 2;
+        while (state.levels.includes(name)) { name = base + ' ' + n; n++; }
+        state.levels.push(name);
+        saveState(); render(); break;
+      }
+      case 'delete-level': {
+        const idx = parseInt(el.dataset.idx);
+        const target = state.levels[idx];
+        if (state.meetings.some(m => (m.level||DEFAULT_LEVEL) === target)) {
+          alert('Existem reuniões usando este nível. Mova-as antes de excluir.');
+          return;
+        }
+        state.levels.splice(idx, 1);
+        state.hiddenLevels = state.hiddenLevels.filter(x => x !== target);
+        saveState(); render(); break;
+      }
+      case 'open-share': {
+        state.modal = { kind: 'share', authorName: '', link: '', status: null };
+        render(); break;
+      }
+      case 'generate-link': {
+        const authorEl = document.getElementById('share-author');
+        const authorName = authorEl ? authorEl.value.trim() : '';
+        const link = buildShareLink(authorName);
+        state.modal = { kind: 'share', authorName: authorName, link: link, status: null };
+        render(); break;
+      }
+      case 'copy-link': {
+        const link = state.modal.link;
+        if (!link) return;
+        const showOk = () => {
+          state.modal = { ...state.modal, status: '✓ Link copiado para a área de transferência' };
+          render();
+          setTimeout(() => {
+            if (state.modal && state.modal.kind === 'share') {
+              state.modal = { ...state.modal, status: null };
+              render();
+            }
+          }, 2500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(link).then(showOk).catch(() => {
+            // fallback: manual selection
+            const box = document.getElementById('share-link-box');
+            if (box) {
+              const range = document.createRange();
+              range.selectNodeContents(box);
+              const sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+              try { document.execCommand('copy'); showOk(); } catch (e) {}
+            }
+          });
+        } else {
+          const box = document.getElementById('share-link-box');
+          if (box) {
+            const range = document.createRange();
+            range.selectNodeContents(box);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            try { document.execCommand('copy'); showOk(); } catch (e) {}
+          }
+        }
+        break;
+      }
+      case 'exit-view': {
+        // Restore the user's own data
+        if (state.ownerBackup) {
+          state.types = state.ownerBackup.types;
+          state.levels = state.ownerBackup.levels;
+          state.meetings = state.ownerBackup.meetings;
+          state.hiddenTypeIds = state.ownerBackup.hiddenTypeIds;
+          state.hiddenLevels = state.ownerBackup.hiddenLevels;
+        }
+        state.viewMode = 'owner';
+        state.sharedSnapshot = null;
+        state.ownerBackup = null;
+        // Clear the hash so a refresh doesn't put us back into view mode
+        if (window.location.hash) {
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+        render(); break;
+      }
+      case 'import-shared': {
+        if (!state.sharedSnapshot) return;
+        const snap = state.sharedSnapshot;
+        const choice = confirm(
+          'Como deseja importar?\n\n' +
+          'OK = MESCLAR (adiciona as reuniões compartilhadas à sua agenda)\n' +
+          'Cancelar = SUBSTITUIR (apaga sua agenda atual e usa só a compartilhada)'
+        );
+        // Switch back to owner mode first
+        state.viewMode = 'owner';
+        if (choice) {
+          // Merge: restore owner backup, then add shared on top
+          if (state.ownerBackup) {
+            state.types = state.ownerBackup.types.slice();
+            state.levels = state.ownerBackup.levels.slice();
+            state.meetings = state.ownerBackup.meetings.slice();
+            state.hiddenTypeIds = state.ownerBackup.hiddenTypeIds.slice();
+            state.hiddenLevels = state.ownerBackup.hiddenLevels.slice();
+          }
+          // Add shared types not already present (by name)
+          (snap.types || []).forEach(st => {
+            if (!state.types.some(t => t.name === st.name)) {
+              state.types.push({ ...st, id: 'tp' + Date.now() + Math.random().toString(36).slice(2,5) });
+            }
+          });
+          // Add shared levels not already present
+          (snap.levels || []).forEach(sl => {
+            if (!state.levels.includes(sl)) state.levels.push(sl);
+          });
+          // Map shared type ids to local type ids by name
+          const sharedTypeMap = {};
+          (snap.types || []).forEach(st => {
+            const local = state.types.find(t => t.name === st.name);
+            if (local) sharedTypeMap[st.id] = local.id;
+          });
+          // Add meetings with new ids and remapped type ids
+          (snap.meetings || []).forEach(m => {
+            const newId = 'm' + Date.now() + Math.random().toString(36).slice(2,7);
+            state.meetings.push({
+              ...m,
+              id: newId,
+              typeId: sharedTypeMap[m.typeId] || state.types[0]?.id || ''
+            });
+          });
+        } else {
+          // Replace: keep the shared snapshot data as-is
+          state.types = (snap.types || []).slice();
+          state.levels = (snap.levels || []).slice();
+          state.meetings = (snap.meetings || []).slice();
+          state.hiddenTypeIds = [];
+          state.hiddenLevels = [];
+        }
+        state.sharedSnapshot = null;
+        state.ownerBackup = null;
+        if (window.location.hash) {
+          history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+        saveState();
+        alert('Agenda importada! ✓');
+        render();
+        break;
+      }
+    }
+  }
+
+  function handleTypeNameChange(e) {
+    const idx = parseInt(e.currentTarget.dataset.idx);
+    state.types[idx].name = e.currentTarget.value || 'Sem nome';
+    saveState();
+  }
+
+  function handleLevelNameChange(e) {
+    const idx = parseInt(e.currentTarget.dataset.idx);
+    const oldName = state.levels[idx];
+    const newName = (e.currentTarget.value || '').trim() || 'Sem nome';
+    if (newName === oldName) return;
+    // avoid duplicates
+    if (state.levels.includes(newName)) {
+      e.currentTarget.value = oldName;
+      alert('Já existe um nível com esse nome.');
+      return;
+    }
+    state.levels[idx] = newName;
+    // propagate rename to meetings and hidden filter
+    state.meetings.forEach(m => {
+      if ((m.level || DEFAULT_LEVEL) === oldName) m.level = newName;
+    });
+    state.hiddenLevels = state.hiddenLevels.map(x => x === oldName ? newName : x);
+    saveState();
+    render();
+  }
+
+  function openMeetingModal(id, defaultDate) {
+    if (id) {
+      const m = state.meetings.find(x => x.id === id);
+      if (!m) return;
+      state.modal = { kind: 'meeting', meeting: { ...m, level: m.level || state.levels[0] || DEFAULT_LEVEL, status: m.status || 'scheduled' }, isNew: false };
+    } else {
+      if (state.viewMode === 'viewing') return;  // can't create in view mode
+      state.modal = {
+        kind: 'meeting',
+        meeting: {
+          id: uid(),
+          title: '',
+          date: defaultDate || fmtDateISO(new Date()),
+          time: '',
+          typeId: state.types[0]?.id || '',
+          level: state.levels[0] || DEFAULT_LEVEL,
+          status: 'planned',
+          participants: '',
+          agenda: ''
+        },
+        isNew: true
+      };
+    }
+    render();
+  }
+
+  function saveMeeting() {
+    const m = state.modal.meeting;
+    m.title = document.getElementById('m-title').value.trim() || 'Sem título';
+    m.date = document.getElementById('m-date').value;
+    m.time = document.getElementById('m-time').value;
+    m.typeId = document.getElementById('m-type').value;
+    m.participants = document.getElementById('m-participants').value;
+    m.agenda = document.getElementById('m-agenda').value;
+
+    const existing = state.meetings.findIndex(x => x.id === m.id);
+    if (existing >= 0) state.meetings[existing] = m;
+    else state.meetings.push(m);
+
+    saveState();
+    state.modal = null;
+    render();
+  }
+
+  function deleteMeeting() {
+    const id = state.modal.meeting.id;
+    state.meetings = state.meetings.filter(x => x.id !== id);
+    saveState();
+    state.modal = null;
+    render();
+  }
+
+  function checkShareHash() {
+    const hash = window.location.hash;
+    if (!hash || !hash.startsWith('#share=')) return false;
+    const encoded = hash.slice('#share='.length);
+    const snapshot = decodeSnapshotFromHash(encoded);
+    if (!snapshot) {
+      alert('O link de compartilhamento parece inválido ou corrompido.');
+      return false;
+    }
+    // Backup owner data
+    state.ownerBackup = {
+      types: state.types.slice(),
+      levels: state.levels.slice(),
+      meetings: state.meetings.slice(),
+      hiddenTypeIds: state.hiddenTypeIds.slice(),
+      hiddenLevels: state.hiddenLevels.slice()
+    };
+    // Swap in shared data for viewing
+    state.types = (snapshot.types || []).slice();
+    state.levels = (snapshot.levels || []).slice();
+    state.meetings = (snapshot.meetings || []).slice();
+    state.hiddenTypeIds = [];
+    state.hiddenLevels = [];
+    state.viewMode = 'viewing';
+    state.sharedSnapshot = snapshot;
+    return true;
+  }
+
+  loadState();
+  checkShareHash();
+  render();
+})();
+</script>
+</body>
+</html>
